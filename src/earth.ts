@@ -181,13 +181,13 @@ export const getTileMap = () => tileMap
 const makeEarthMeshes = (tiles: Array<Tile>, radius: number) => {
 	const img = document.getElementById("projection") as HTMLImageElement
 	const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
 	canvas.width = img.width;
     canvas.height = img.height;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
 	ctx?.drawImage(img, 0, 0, img.width, img.height)
 
 	const earth = new THREE.Object3D()
-	const outlines = new THREE.Object3D()
 
 	tiles.forEach(tile => {
 		const geo = makeTileGeometry(tile)
@@ -204,18 +204,13 @@ const makeEarthMeshes = (tiles: Array<Tile>, radius: number) => {
 		mesh.castShadow = true
 		mesh.layers.enable(1)
 		earth.add(mesh)
-	
-		outlines.add(makeEdgeGeometry(geo))
 	})
 
 	const geo2 = new THREE.SphereGeometry(radius, 80, 80); 
 	const fresnelMat = createFresnelMaterial();
 	const glowMesh = new THREE.Mesh(geo2, fresnelMat);
-	
 
-	return {
-		glowMesh, earth, outlines
-	}
+	return { glowMesh, earth }
 }
 
 
