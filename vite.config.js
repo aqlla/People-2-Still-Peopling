@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite'
 
-
 export default defineConfig({
-	'base': '/People-2-Still-Peopling/'
+  base: '/orsons-beetles/',
+  assetsInclude: ['geometries/*.json']
 })

@@ -4,10 +4,59 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + TS</title>
+    <title>People 2</title>
+    <!-- <link rel="stylesheet" href="./style.css"> -->
   </head>
-  <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.ts"></script>
+  <body>    
+    <header>
+      <h2>Some 3D Stuff.</h2>
+    </header>
+    <main>
+      <section>
+        <header>
+          <h3>World Viewer</h3>
+        </header>
+        <form id="world-picker">
+          <label for="subdivisions">World size (number of subdivisions):</label>
+          <select id="subdivisions" name="subdivisions"></select>
+          <!-- <input type="submit" formmethod="get" formtarget="worldview.html"></input> -->
+          <button onclick="navigate()">Go...</button>
+        </form>
+      </section>
+
+      <section>
+        <header>
+          <h3>People 2: Still Peopling</h3>
+        </header>
+      </section>
+    </main>
   </body>
+
+  <script>
+    const createElement = (tagName, options) => {
+      const el = document.createElement(tagName)
+      for (let key of Object.keys(options)) {
+        el[key] = options[key]
+      }
+      return el
+    }
+
+    function navigate() {
+      const n = document.getElementById("subdivisions").value;
+      const targetUrl = `worldview?subdivisions=${n}`;
+      window.location.href = targetUrl;
+    }
+
+    const allowedValues = [23, 29, 44, 56, 68, 71, 77, 80, 89];
+    const selectElement = document.getElementById("subdivisions");
+  
+    allowedValues
+      .map(v => createElement('option', { value: v, text: v }))
+      .forEach(e => selectElement.appendChild(e))
+  </script>
+
+  <!-- <div id="app"></div> -->
+  <img id="projection" src="./img/earth_color-map.5400x2700.jpg"/>
+  <script type="module" src="./src/main.ts"></script>
+
 </html>

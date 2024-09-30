@@ -2,17 +2,22 @@
   "name": "people-2-still-peopling",
   "homepage": "https://aqlla.github.io/People-2-Still-Peopling/",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "deploy": "gh-pages -d ./dist"
+    "deploy": "func() { tsc && vite build && git add . && git commit -am \"build - $1\" && git push origin main; }; func"
   },
   "devDependencies": {
-    "gh-pages": "^6.1.1",
     "typescript": "^5.5.3",
-    "vite": "^5.4.1"
+    "vite": "^5.4.1",
+    "@types/dat.gui": "^0.7.13",
+    "@types/three": "^0.169.0",
+    "dat.gui": "^0.7.9",
+    "file-saver": "^2.0.5",
+    "three": "^0.169.0",
+    "ts-math-vec": "git+https://github.com/aqlla/ts-math-vec.git"
   }
 }
