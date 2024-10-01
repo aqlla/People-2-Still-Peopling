@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js'
-import { groupFaces, toJson, OVec3, Tile } from './goldberg.ts';
+import { groupFaces, toJson, OVec3, Tile } from './util/math/geometry/goldberg.ts';
 import { saveAs } from 'file-saver';
-import { toIndexed } from './BufferGeometryToIndexed.js'
+import { toIndexed } from './util/three-tools/BufferGeometryToIndexed.js'
 
 const sizes = [
 	2, 5, 8, 11, 14, 17, 23, 29, 32, 35, 44, 56, 68, 89
 ]
+
 
 type SphericalCoord = {
 	r: number,
@@ -14,10 +15,12 @@ type SphericalCoord = {
 	theta: number
 }
 
+
 type LatLon = {
 	lat: number,
 	lon: number
 }
+
 
 type TODO = any
 
@@ -37,12 +40,14 @@ const cartesianToSpherical = ({ x, y, z }: OVec3) => {
     return { r, theta, phi };
 }
 
+
 const sphericalToCartesian = ({ r, theta, phi }: SphericalCoord) => {
 	const x = r * Math.sin(theta) * Math.cos(phi);
     const y = r * Math.sin(theta) * Math.sin(phi);
     const z = r * Math.cos(theta);
     return { x, y, z };
 }
+
 
 const cartesianToLatLon = ({ x, y, z }: OVec3) => {
     const r = Math.sqrt(x * x + y * y + z * z);
@@ -51,12 +56,14 @@ const cartesianToLatLon = ({ x, y, z }: OVec3) => {
     return { lat, lon };
 }
 
+
 const setVertexHeight = (height: number) => (vert: OVec3) => {
 	const spherical = cartesianToSpherical(vert);
 	spherical.r += height
 	const { x, y, z } = sphericalToCartesian(spherical)
 	return new THREE.Vector3(x, y, z)
 }
+
 
 const createFresnelMaterial = ({rimHex = 0x0088ff, facingHex = 0x000000} = {}) => {
 	const uniforms = {
@@ -120,7 +127,6 @@ const generateWorld = async (n: number, r: number) => {
 }
 
 
-
 const isWater = (hexValue: number): boolean => {
 	const threshG = 5
 	const threshR = 9
@@ -139,7 +145,6 @@ const isWater = (hexValue: number): boolean => {
 }
 
 
-
 const getEarthColor = ({ lat, lon }: LatLon, ctx: TODO) => {
     const u = 1 - (lon + Math.PI) / (2 * Math.PI);
     const v = (lat + Math.PI / 2) / Math.PI;
@@ -155,12 +160,14 @@ const getEarthColor = ({ lat, lon }: LatLon, ctx: TODO) => {
 	return (r << 16) | (g << 8) | b
 }
 
+
 const rotateGeometry = (geo: ConvexGeometry & TODO) => {
 	const rotMat1 = new THREE.Matrix4().makeRotationX(Math.PI / 2)
 	geo.applyMatrix4(rotMat1)
 	geo.vertsNeedUpdate = true
 	return geo
 }
+
 
 const makeTileGeometry = (tile: Tile) => {
 	const height = 1; //Math.random() * 1.5

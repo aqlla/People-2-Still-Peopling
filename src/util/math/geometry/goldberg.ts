@@ -2,10 +2,7 @@ import * as THREE from "three";
 import {
 	Optional,
 	Tuple
-} from "./util/types.ts";
-import {
-	toIndexed
-} from "./BufferGeometryToIndexed.js";
+} from "../../types.ts";
 
 declare global {
 	interface Array < T > {

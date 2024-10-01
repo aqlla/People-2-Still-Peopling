@@ -1,4 +1,4 @@
-import {Tuple} from "../../util/types.ts";
+import {Tuple} from "../../types.ts";
 
 
 export type Vec<N extends number> = Tuple<N, number>
