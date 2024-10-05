@@ -1,69 +1,30 @@
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js'
-import { groupFaces, toJson, OVec3, Tile } from './util/math/geometry/goldberg.ts';
+import { groupFaces, toJson, Tile } from './util/math/geometry/goldberg.ts';
 import { saveAs } from 'file-saver';
+import { Cartesian3D, cartesianToGeographic, cartesianToSpherical, Geographic, sphericalToCartesian } from './util/math/geometry/coordinates.ts';
+import { TODO } from './util/types.ts';
 import { toIndexed } from './util/three-tools/BufferGeometryToIndexed.js'
 
-const sizes = [
-	2, 5, 8, 11, 14, 17, 23, 29, 32, 35, 44, 56, 68, 89
-]
 
-
-type SphericalCoord = {
-	r: number,
-	phi: number,
-	theta: number
-}
-
-
-type LatLon = {
-	lat: number,
-	lon: number
-}
-
-
-type TODO = any
-
-const WIREFRAME = false
-const FLAT_SHADING = false
-
-
-const makeEdgeGeometry = (geo: THREE.BufferGeometry) => new THREE.LineSegments(
-	new THREE.EdgesGeometry(geo), 
-	new THREE.LineBasicMaterial({ color: 0x080808 }));
-
-	
-const cartesianToSpherical = ({ x, y, z }: OVec3) => {
-	const r = Math.sqrt(x * x + y * y + z * z);
-    const theta = Math.acos(z / r);
-    const phi = Math.atan2(y, x);
-    return { r, theta, phi };
-}
-
-
-const sphericalToCartesian = ({ r, theta, phi }: SphericalCoord) => {
-	const x = r * Math.sin(theta) * Math.cos(phi);
-    const y = r * Math.sin(theta) * Math.sin(phi);
-    const z = r * Math.cos(theta);
-    return { x, y, z };
-}
-
-
-const cartesianToLatLon = ({ x, y, z }: OVec3) => {
-    const r = Math.sqrt(x * x + y * y + z * z);
-    const lat = Math.asin(z / r);
-    const lon = Math.atan2(y, x);
-    return { lat, lon };
-}
-
-
-const setVertexHeight = (height: number) => (vert: OVec3) => {
-	const spherical = cartesianToSpherical(vert);
-	spherical.r += height
-	const { x, y, z } = sphericalToCartesian(spherical)
+const setVertexHeight = (height: number) => (vert: Cartesian3D) => {
+	const { radius, theta, phi } = cartesianToSpherical(vert);
+	const { x, y, z } = sphericalToCartesian({
+		radius: radius + height,
+		theta,
+		phi
+	})
 	return new THREE.Vector3(x, y, z)
 }
 
+const generateWorld = async (n: number, r: number) => {
+	console.log(`Generating Goldberg... n=${n}, r=${r}`)
+	const ico = toIndexed(new THREE.IcosahedronGeometry(r, n))(true, 6);
+	const tiles = groupFaces(ico);
+	const blob = new Blob([toJson(tiles)], { type: 'application/json' })
+	await saveAs(blob, `/people-2-still-peopling/geometries/goldberg_${n}_${r}.json`)
+	return tiles
+}
 
 const createFresnelMaterial = ({rimHex = 0x0088ff, facingHex = 0x000000} = {}) => {
 	const uniforms = {
@@ -114,38 +75,13 @@ const createFresnelMaterial = ({rimHex = 0x0088ff, facingHex = 0x000000} = {}) =
 	})
 }
 
-
-const generateWorld = async (n: number, r: number) => {
-	console.log(`Generating Goldberg... n=${n}, r=${r}`)
-	const ico = toIndexed(new THREE.IcosahedronGeometry(r, n))(true, 6)
-	// ico.computeVertexNormals()
-	console.log(ico)
-	const tiles = groupFaces(ico);
-	const blob = new Blob([toJson(tiles)], { type: 'application/json' })
-	await saveAs(blob, `./geometries/goldberg_${n}_${r}.json`)
-	return tiles
+export const makeGlowMesh = (radius: number) => {
+	const sphere = new THREE.SphereGeometry(radius, 80, 80); 
+	const fresnelMat = createFresnelMaterial();
+	return new THREE.Mesh(sphere, fresnelMat);
 }
 
-
-const isWater = (hexValue: number): boolean => {
-	const threshG = 5
-	const threshR = 9
-    // Ensure the hex value is a valid number
-    if (hexValue < 0x000000 || hexValue > 0xFFFFFF) {
-        return false
-    }
-
-    // Extract the red, green, and blue components
-    const r = (hexValue >> 16) & 0xFF;
-    const g = (hexValue >> 8) & 0xFF;
-    const b = hexValue & 0xFF;
-
-    return hexValue < 200000 || (b - r > threshR && b - g > threshG)
-	// return (b - r > threshR && b - g > threshG)
-}
-
-
-const getEarthColor = ({ lat, lon }: LatLon, ctx: TODO) => {
+const getEarthColor = ({ lat, lon }: Geographic, ctx: TODO) => {
     const u = 1 - (lon + Math.PI) / (2 * Math.PI);
     const v = (lat + Math.PI / 2) / Math.PI;
     const x = Math.floor(u * ctx.canvas.width);
@@ -154,12 +90,9 @@ const getEarthColor = ({ lat, lon }: LatLon, ctx: TODO) => {
 	const r = pixel[0];
 	const g = pixel[1];
 	const b = pixel[2];
-
-    const raw = (r << 16) | (g << 8) | b
-	// return isWater(raw)? 0x0040cc : raw
+    // const raw = (r << 16) | (g << 8) | b
 	return (r << 16) | (g << 8) | b
 }
-
 
 const rotateGeometry = (geo: ConvexGeometry & TODO) => {
 	const rotMat1 = new THREE.Matrix4().makeRotationX(Math.PI / 2)
@@ -168,10 +101,11 @@ const rotateGeometry = (geo: ConvexGeometry & TODO) => {
 	return geo
 }
 
-
 const makeTileGeometry = (tile: Tile) => {
-	const height = 1; //Math.random() * 1.5
-	const verts = tile.vertices.map(setVertexHeight(height))
+	const verts = 
+		// TODO: for some reason this is required to prevent some hexes
+		// from rendering from having too few vertices ??
+		tile.vertices.map(setVertexHeight(1))
 	const geo = rotateGeometry(new ConvexGeometry(verts))
 	geo.computeVertexNormals()
 	geo.castShadow = true
@@ -179,13 +113,7 @@ const makeTileGeometry = (tile: Tile) => {
 	return geo 
 }
 
-
-const tileMap = new Map<string, { tile: Tile, color: number }>()
-
-export const getTileMap = () => tileMap
-
-
-const makeEarthMeshes = (tiles: Array<Tile>, radius: number) => {
+const makeEarthMesh = (tiles: Array<Tile>): THREE.Object3D => {
 	const img = document.getElementById("projection") as HTMLImageElement
 	const canvas = document.createElement('canvas')
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -196,43 +124,34 @@ const makeEarthMeshes = (tiles: Array<Tile>, radius: number) => {
 
 	const earth = new THREE.Object3D()
 
-	tiles.forEach(tile => {
+	tiles.forEach((tile: Tile) => {
 		const geo = makeTileGeometry(tile)
-		const coord = cartesianToLatLon(tile.centroid)
+		const coord = cartesianToGeographic(tile.centroid)
 		const color = getEarthColor(coord, ctx)
 		const material = new THREE.MeshStandardMaterial({
-			color,
-			flatShading: FLAT_SHADING,
-			wireframe: WIREFRAME,
+			color, flatShading: true
 		});
 	
 		const mesh = new THREE.Mesh(geo, material)
-		tileMap.set(mesh.uuid, { tile, color })
 		mesh.castShadow = true
 		mesh.layers.enable(1)
 		earth.add(mesh)
 	})
 
-	const geo2 = new THREE.SphereGeometry(radius, 80, 80); 
-	const fresnelMat = createFresnelMaterial();
-	const glowMesh = new THREE.Mesh(geo2, fresnelMat);
-
-	return { glowMesh, earth }
+	return earth
 }
 
-
-type EarthMeshes = Record<string, THREE.Object3D>
-
-export const getEarth = (n: number, r: number): Promise<EarthMeshes> =>
-	fetch(`/people-2-still-peopling/geometries/goldberg_${n}_${r}.json`)
-		.then(res => res.json())
-		.then(data => data.map(({ center, vertices, facet, centroid }: Tile) => ({ 
-			facet, center, centroid,
-			vertices: vertices.map(v => new THREE.Vector3(...v)) 
-		})))
-		.catch(async () => await generateWorld(n, r))
-		.then(tiles => makeEarthMeshes(tiles, r))
-		.catch(error => {
-			console.log(error)
-			return {}
-		})
+export const getEarth = 
+	(n: number, r: number): Promise<THREE.Object3D> =>
+		fetch(`/people-2-still-peopling/geometries/goldberg_${n}_${r}.json`)
+			.then(res => res.json())
+			.then(data => data.map(({ center, vertices, facet, centroid }: Tile) => ({ 
+				facet, center, centroid,
+				vertices: vertices.map(v => new THREE.Vector3(...v)) 
+			})))
+			.catch(async () => await generateWorld(n, r))
+			.then(tiles => makeEarthMesh(tiles))
+			.catch(error => {
+				console.log(error)
+				return {} as THREE.Object3D
+			})

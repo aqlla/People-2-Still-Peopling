@@ -1,38 +1,30 @@
-import {Tuple} from "../../types.ts";
-
-
-export type Vec<N extends number> = Tuple<N, number>
-
-export type Vec3 = Vec<3>
-
-
-export type Vertex = Vec<3> | number
+import { Tup } from "../../types.ts";
 
 export type Polygon<
 	N extends number,
-	TVertex extends Vertex> = Tuple<N, TVertex>
+	TVertex extends number> = Tup<N, TVertex>
 
 
 export type Polyhedron = {
 	faces: Polygon<3, number>[],
-	vertices: Vec3[]
+	vertices: Tup<3, number>[]
 }
 
 // Helper function to normalize a vector
-const normalize = (v: Vec3): Vec3 => {
+const normalize = (v: Tup<3>): Tup<3> => {
 	const length = Math.sqrt(v[0] ** 2 + v[1] ** 2 + v[2] ** 2);
 	return [v[0] / length, v[1] / length, v[2] / length];
 };
 
 // Helper function to find the midpoint of two vertices
-const midpoint = (v1: Vec3, v2: Vec3): Vec3 => normalize([
+const midpoint = (v1: Tup<3>, v2: Tup<3>): Tup<3> => normalize([
 	(v1[0] + v2[0]) / 2,
 	(v1[1] + v2[1]) / 2,
 	(v1[2] + v2[2]) / 2,
 ]);
 
 const PHI = (1 + Math.sqrt(5)) / 2;
-const VERTICES: Vec<3>[] = [
+const VERTICES: Tup<3>[] = [
 	[-1, PHI, 0],
 	[1, PHI, 0],
 	[-1, -PHI, 0],
@@ -79,7 +71,7 @@ const subdivide = ({ vertices, faces }: Polyhedron) => {
 	const vertexCache = {};
 	const newFaces: Polygon<3, number>[] = [];
 
-	const addVertex = (vertex: Vec3) => {
+	const addVertex = (vertex: Tup<3>) => {
 		const key = vertex.toString();
 		if (!(key in vertexCache)) {
 			vertexCache[key] = vertices.length;

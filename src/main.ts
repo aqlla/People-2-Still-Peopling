@@ -2,28 +2,10 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import Stats from 'three/addons/libs/stats.module.js'
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js'
-import { getEarth, getTileMap } from './earth.js'
-import { Tile } from './util/math/geometry/goldberg.js'
-
-
-// import './style.css'
-// document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-//   <div>
-//     <a href="https://vitejs.dev" target="_blank">
-//     </a>
-//     <a href="https://www.typescriptlang.org/" target="_blank">
-//     </a>
-//     <h1>Vite + TypeScript</h1>
-//     <div class="card">
-//       <button id="counter" type="button"></button>
-//     </div>
-//     <p class="read-the-docs">
-//       Click on the Vite and TypeScript logos to learn more
-//     </p>
-//   </div>
+import { getEarth, makeGlowMesh } from './earth.js'
 
 const uni = {
-    n: 89,
+    n: 11,
     r: 25,
     fov: 5,
     scale: 1,
@@ -31,19 +13,23 @@ const uni = {
     wireframe: false,
     flat_shading: false,
     outlines: false,
-    moveSpeed: .03,
+    moveSpeed: .4,
     rotationSpeed: .03,
-    zoomSpeed: .5,
+    zoomSpeed: 12,
     rotateEarth: true,
     axialTiltX: 23.4,
     axialTiltY: 0,
 }
 
+const X_AXIS = new THREE.Vector3(1, 0, 0);
+const Y_AXIS = new THREE.Vector3(0, 0, 1);
+const Z_AXIS = new THREE.Vector3(0, 1, 0);
+
 const scene = new THREE.Scene()
 const camera = new THREE.PerspectiveCamera(uni.fov, window.innerWidth / window.innerHeight, 0.1, 5000)
-camera.position.z = 344 + uni.r
-camera.position.x = -69
-camera.position.y = 15
+camera.position.z = 150 + uni.r
+camera.position.x = 20
+camera.position.y = 0
 
 const renderer = new THREE.WebGLRenderer({ antialias: true })
 renderer.setSize(window.innerWidth, window.innerHeight)
@@ -51,6 +37,7 @@ document.body.appendChild(renderer.domElement)
 
 const controls = new OrbitControls(camera, renderer.domElement)
 controls.listenToKeyEvents(window)
+// controls.enableZoom = false
 
 const sunLight = new THREE.DirectionalLight(0xffffff, 2);
 sunLight.position.set(900, 0, 900);
@@ -62,6 +49,13 @@ scene.add(helper);
 
 const stats = new Stats()
 document.body.appendChild(stats.dom)
+
+const earth = await getEarth(uni.n, uni.r);
+const glowMesh = makeGlowMesh(uni.r)
+glowMesh.scale.setScalar(uni.atmo_scale)
+scene.add(earth!)
+scene.add(glowMesh!)
+
 
 const gui = new GUI()
 const cameraFolder = gui.addFolder('Camera')
@@ -83,102 +77,114 @@ sunPosFolder.add(sunLight.position, 'y', uni.r + 10, 1000)
 sunPosFolder.add(sunLight.position, 'z', uni.r + 10, 1000)
 gui.close()
 
+const earthFolder = gui.addFolder('Earth')
+earthFolder.add(uni, 'atmo_scale', 1.0, 1.3).listen()
+    .onChange((value: number) => glowMesh.scale.setScalar(value))
+const earthRotFolder = earthFolder.addFolder('Rotation')
+earthRotFolder.add(uni, 'rotateEarth').name('Enable').listen()
+earthRotFolder.add(uni, 'rotationSpeed', -1, 1).name('Speed').listen()
+earthRotFolder.add(earth.rotation, 'x', -180, 180).listen()
+earthRotFolder.add(earth.rotation, 'y', -180, 180).listen()
+earthRotFolder.add(earth.rotation, 'z', -180, 180).listen()
+
+
 const raycaster = new THREE.Raycaster();
 raycaster.layers.set(1)
 const pointer = new THREE.Vector2();
 
 
-const onPointerMove = (event: PointerEvent) => {
-    // calculate pointer position in normalized device coordinates
-    // (-1 to +1) for both components
-    pointer.x = ( event.clientX / window.innerWidth ) * 2 - 1;
-    pointer.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+const keys: Record<string, boolean> = {}
+
+const fovConfig = {
+    max: 50,
+    min: 2
 }
 
-let tileMap: Map<string, { tile: Tile, color: number }>
-let prevIntersect: THREE.Mesh
-let prevSelected: string
-
-const onclick = (event: MouseEvent) => {
-    console.log(event)
-    if (!!prevSelected) {
-        console.log(tileMap.get(prevSelected))
-    }
+const radiusConfig = {
+    max: 100,
+    min: uni.r + 5
 }
 
-const keys: Record<string, boolean> = { w: false, a: false, s: false, d: false };
-const X_AXIS = new THREE.Vector3(1, 0, 0);
-const Y_AXIS = new THREE.Vector3(0, 0, 1);
-const Z_AXIS = new THREE.Vector3(0, 1, 0);
+const viewState = {
+    radius: 50,
+    fov: uni.fov,
+    theta: 90,
+    phi: 90,
+    target: new THREE.Vector3(0, 0, uni.r)
+}
 
 
 const clock = new THREE.Clock()
 let delta: number
-let hex_earth: THREE.Object3D
-
-
-getEarth(uni.n, uni.r)
-    .then(({ earth, glowMesh }) => {
-        let curAxialTiltX = uni.axialTiltX
-        let curAxialTiltY = uni.axialTiltY
-        glowMesh.scale.setScalar(uni.atmo_scale)
-
-        tileMap = getTileMap()
-
-        scene.add(earth!)
-        scene.add(glowMesh!)
-
-        const earthFolder = gui.addFolder('Earth')
-        earthFolder
-            .add(uni, 'axialTiltX', -23.4, 23.4)
-            .listen()
-            .onChange((value: number) => {
-                const delta = curAxialTiltX - value
-                earth.rotateOnAxis(X_AXIS, delta * Math.PI / 180)
-                curAxialTiltX = uni.axialTiltX
-            })
-
-        earthFolder
-            .add(uni, 'axialTiltY', -23.4, 23.4)
-            .listen()
-            .onChange((value: number) => {
-                const delta = curAxialTiltY - value
-                earth.rotateOnWorldAxis(Y_AXIS, delta * Math.PI / 180)
-                curAxialTiltY = uni.axialTiltY
-            })
-
-        earthFolder
-            .add(uni, 'atmo_scale', 1.0, 1.3)
-            .listen()
-            .onChange((value: number) => glowMesh.scale.setScalar(value))
-
-        const earthRotFolder = earthFolder.addFolder('Rotation')
-        earthRotFolder.add(uni, 'rotateEarth').name('Enable').listen()
-        earthRotFolder.add(uni, 'rotationSpeed', -1, 1).name('Speed').listen()
-        earthRotFolder.add(earth.rotation, 'x', -180, 180).listen()
-        earthRotFolder.add(earth.rotation, 'y', -180, 180).listen()
-        earthRotFolder.add(earth.rotation, 'z', -180, 180).listen()
-
-        hex_earth = earth
-
-        animate()
-    })
 
 function animate() {
-    // delta = clock.getDelta()
-    if (keys.a) camera.position.applyAxisAngle(camera.up, -uni.moveSpeed)
-    if (keys.d) camera.position.applyAxisAngle(camera.up, uni.moveSpeed)
-    if (keys.w) camera.position.applyAxisAngle(X_AXIS, -uni.moveSpeed)
-    if (keys.s) camera.position.applyAxisAngle(X_AXIS, uni.moveSpeed)
+    delta = clock.getDelta()
 
-    camera.lookAt(0, 0, 0)
+    const zoomDelta = uni.zoomSpeed * delta
+    const moveDelta = uni.moveSpeed * delta
+
+    if (keys.a) viewState.theta += moveDelta
+    if (keys.d) viewState.theta -= moveDelta
+    if (keys.w) viewState.phi -= moveDelta
+    if (keys.s) viewState.phi += moveDelta
+
+    if (keys.r) { zoomCamera(zoomDelta, 1) }
+    if (keys.f) { zoomCamera(zoomDelta, -1) }
+
+    // Apply the modifier to either reduce or increase the FOV based on zoom direction
+    viewState.fov = (viewState.radius - radiusConfig.min) 
+        / (radiusConfig.max - radiusConfig.min) 
+        // * (fovConfig.min - fovConfig.max) + fovConfig.max
+        * (fovConfig.max - fovConfig.min) + fovConfig.min
+
+    // camera.fov = fov + fovModifier * (maxFOV - fov);
+    camera.fov = viewState.fov;
+
+    const x = viewState.radius * Math.sin(viewState.phi) * Math.cos(viewState.theta);
+    const y = viewState.radius * Math.cos(viewState.phi); // Y-axis for up/down tilt
+    const z = viewState.radius * Math.sin(viewState.phi) * Math.sin(viewState.theta);
+
+    camera.position.set(x, y, z);
+    camera.lookAt(viewState.target)
     renderer.render(scene, camera)
     stats.update()
+    camera.updateProjectionMatrix();
+
     requestAnimationFrame(animate)
 }
 
-window.addEventListener('click', onclick)
-window.addEventListener('pointermove', onPointerMove);
+
+animate()
+
+
+const zoomCamera = (deltaZoom: number, direction: number) => {
+    // Adjust the camera distance (radius) based on user input
+    viewState.radius = Math.max(radiusConfig.min, 
+        Math.min(radiusConfig.max, viewState.radius + (deltaZoom * direction)));
+}
+
+const locateCursorIntersects = () => {
+    raycaster.setFromCamera(pointer, camera);
+    // calculate objects intersecting the picking ray
+    const intersects = raycaster.intersectObjects(scene.children)
+    return intersects[0].point
+}
+
+window.addEventListener('click', () => {
+    const target = locateCursorIntersects()
+
+    for (let prop of ['x', 'y', 'z']) {
+        viewState.target[prop] = target[prop]
+    }
+    console.log(target)
+})
+
+window.addEventListener('pointermove', (event: PointerEvent) => {
+    // calculate pointer position in normalized device coordinates
+    // (-1 to +1) for both components
+    pointer.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+    pointer.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+});
 
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -187,9 +193,6 @@ window.addEventListener('resize', () => {
 });
 
 document.addEventListener('keydown', (event) => {
-    if (event.key === ' ') {
-        uni.rotateEarth = !uni.rotateEarth
-    }
     keys[event.key.toLowerCase()] = true;
 }); 
 

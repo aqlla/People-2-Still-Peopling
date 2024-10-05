@@ -1,0 +1,5 @@
+export * from './coordinates'
+export * from './geometry'
+export * from './goldberg'
+// export * from './icosahedron'
+export * from './triangles'
